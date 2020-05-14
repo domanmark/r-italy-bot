@@ -5,43 +5,70 @@ from googletrans import Translator
 import csv
 
 
-def main():
-    reddit = praw.Reddit("r-italy-bot")
-    comments = get_subreddit_comments(reddit, "italy")
+def tokenize_and_process_text(input_text):
     # spacy has max length of 1 MM characters due to memory use
-    if len(comments) > 1000000:
+    if len(input_text) > 1000000:
         print("WARNING: Too many characters in comments, trimming to 1 million")
-        comments = comments[0:999999]
+        input_text = input_text[0:999999]
+
     nlp = spacy.load("it_core_news_sm")
-    comment_doc = nlp(comments)
+    input_doc = nlp(input_text)
 
     preprocessed = [
-        preprocess_token(token) for token in comment_doc if is_valid_token(token)
+        preprocess_token(token) for token in input_doc if is_valid_token(token)
     ]
+    return preprocessed
 
-    word_freq = Counter(preprocessed)
-    common_words = word_freq.most_common(100)
 
+def translate_tokens(tokens):
+    translations = []
     translator = Translator()
-
-    seen_words = []
-
-    for count, word in enumerate(common_words):
-        ita_text = word[0]
-        word_count = word[1]
-        translation = translator.translate(ita_text, dest="en", src="it")
-        eng_text = translation.text
-        print(f"{count}. {ita_text} --> {eng_text}")
-        seen_words.append([ita_text, eng_text])
-
-    with open("translated_words.csv", "a") as output:
-        outwriter = csv.writer(output)
-        outwriter.writerows(seen_words)
+    for token in tokens:
+        translation = translator.translate(token, dest="en", src="it")
+        translations.append([token, translation.text])
+    return translations
 
 
-def get_subreddit_comments(reddit, subreddit):
+def get_unique_tokens(already_seen, current_input, limit=10):
+    unique = []
+    for token in current_input:
+        if token not in already_seen:
+            unique.append(token)
+        if len(unique) == limit:
+            break
+    return unique
+
+
+def compose_message(translations):
+    message_lines = []
+    for translation in translations:
+        orig = translation[0]
+        trans = translation[1]
+        line = f"{orig} --> {trans}"
+        message_lines.append(line)
+    message = "\n".join(message_lines)
+    return message
+
+
+def send_text(message):
+    # TODO: Add functionality to send a real text
+    print(message)
+
+
+def get_subreddit_comments(reddit, subreddit, submission_limit=15):
+    """Fetch comments from a specified subreddit and concatenate
+       them into one string.
+
+    Args:
+        reddit (Reddit): The Reddit instance from praw
+        subreddit (String): Subreddit to fetch content from
+        submission_limit (int): Max number of submissions to process
+
+    Returns:
+        String: All comments from all submissions processed
+    """
     all_comments = []
-    for submission in reddit.subreddit(subreddit).hot(limit=15):
+    for submission in reddit.subreddit(subreddit).hot(limit=submission_limit):
         submission.comments.replace_more(limit=None)
         for comment in submission.comments.list():
             all_comments.append(comment.body)
@@ -62,6 +89,30 @@ def is_valid_token(token):
 
 def preprocess_token(token):
     return token.lemma_.strip().lower()
+
+
+def main():
+    reddit = praw.Reddit("r-italy-bot")
+    comments = get_subreddit_comments(reddit, "italy")
+    preprocessed = tokenize_and_process_text(comments)
+    word_freq = Counter(preprocessed)
+    common_words = word_freq.most_common(100)
+    words = [word[0] for word in common_words]
+    seen_words = set()
+    with open("seen_words.csv", "r") as seen:
+        seen_reader = csv.reader(seen)
+        for row in seen_reader:
+            seen_words.add(row[0])
+
+    new_tokens = get_unique_tokens(seen_words, words)
+    translations = translate_tokens(new_tokens)
+
+    message = compose_message(translations)
+    send_text(message)
+
+    with open("seen_words.csv", "a") as output:
+        outwriter = csv.writer(output)
+        outwriter.writerows(translations)
 
 
 if __name__ == "__main__":
