@@ -1,2 +1,5 @@
 # Configurations for PRAW
 praw.ini
+
+# Configuration for email addresses
+.json

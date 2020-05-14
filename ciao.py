@@ -3,7 +3,8 @@ import spacy
 from collections import Counter
 from googletrans import Translator
 import csv
-
+import yagmail
+import json
 
 def tokenize_and_process_text(input_text):
     # spacy has max length of 1 MM characters due to memory use
@@ -51,8 +52,17 @@ def compose_message(translations):
 
 
 def send_text(message):
-    # TODO: Add functionality to send a real text
-    print(message)
+    with open("email_config.json") as config_file:
+        config = json.load(config_file)
+        to_email =  config["to_email"]
+        from_email = config["from_email"]
+
+        yag = yagmail.SMTP(from_email)
+        yag.send(
+            to=to_email,
+            subject="r/italy vocab",
+            contents=message,
+        )
 
 
 def get_subreddit_comments(reddit, subreddit, submission_limit=15):
