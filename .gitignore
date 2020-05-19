@@ -2,4 +2,4 @@
 praw.ini
 
 # Configuration for email addresses
-.json
+email_config.json

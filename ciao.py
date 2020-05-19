@@ -1,10 +1,14 @@
+import csv
+import json
+import sys
+from collections import Counter
+from datetime import date
+
 import praw
 import spacy
-from collections import Counter
-from googletrans import Translator
-import csv
 import yagmail
-import json
+from googletrans import Translator
+
 
 def tokenize_and_process_text(input_text):
     # spacy has max length of 1 MM characters due to memory use
@@ -52,17 +56,20 @@ def compose_message(translations):
 
 
 def send_text(message):
-    with open("email_config.json") as config_file:
-        config = json.load(config_file)
-        to_email =  config["to_email"]
-        from_email = config["from_email"]
-
-        yag = yagmail.SMTP(from_email)
-        yag.send(
-            to=to_email,
-            subject="r/italy vocab",
-            contents=message,
-        )
+    try:
+        with open("email_config.json") as config_file:
+            config = json.load(config_file)
+            to_email = config["to_email"]
+            from_email = config["from_email"]
+            today = date.today().strftime("%m/%d")
+            subject = f"{today}: r/italy vocab"
+            yag = yagmail.SMTP(from_email)
+            yag.send(
+                to=to_email, subject=subject, contents=message, newline_to_break=False
+            )
+    except FileNotFoundError:
+        print("ERROR: email_config.json was not found in the current directory.")
+        sys.exit(1)
 
 
 def get_subreddit_comments(reddit, subreddit, submission_limit=15):
@@ -102,6 +109,10 @@ def preprocess_token(token):
 
 
 def main():
+    """Fetch the most common new words from posts on
+        r/italy, translate them, and store the translations
+        to ensure only novel words are shown in the future.
+    """
     reddit = praw.Reddit("r-italy-bot")
     comments = get_subreddit_comments(reddit, "italy")
     preprocessed = tokenize_and_process_text(comments)

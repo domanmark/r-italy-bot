@@ -1,0 +1,4 @@
+spacy==2.2.4
+yagmail==0.11.224
+googletrans==2.4.0
+praw==7.0.0
